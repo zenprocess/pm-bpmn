@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_0u3vf9k"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Camunda Modeler"
+                  exporterVersion="5.0.0">
+  <bpmn:process id="website-lead-capture" name="Website Lead Capture and Routing" isExecutable="true">
+    <bpmn:startEvent id="start_event" name="Contact Form Submitted">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="save_lead_details" name="Save Lead Details">
+      <bpmn:extensionElements>
+        <camunda:connector>
+          <camunda:inputOutput>
+            <camunda:inputParameter name="url">${crm_api_url}/leads</camunda:inputParameter>
+            <camunda:inputParameter name="method">POST</camunda:inputParameter>
+            <camunda:inputParameter name="payload">
+              {
+                "name": "${name}",
+                "email": "${email}",
+                "company": "${company}",
+                "interest": "${interest}"
+              }
+            </camunda:inputParameter>
+          </camunda:inputOutput>
+        </camunda:connector>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="enrich_lead_data" name="Enrich Lead Data">
+      <bpmn:extensionElements>
+        <camunda:connector>
+          <camunda:inputOutput>
+            <camunda:inputParameter name="url">${enrichment_api_url}/company-info</camunda:inputParameter>
+            <camunda:inputParameter name="method">POST</camunda:inputParameter>
+          </camunda:inputOutput>
+        </camunda:connector>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="lead_type_gateway" name="Lead Type?">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:businessRuleTask id="score_lead" name="Score Lead" camunda:decisionRef="lead_scoring">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+
+    <bpmn:exclusiveGateway id="priority_gateway" name="Priority Score?">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="assign_enterprise" name="Assign Enterprise Team">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:outgoing>Flow_10</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="enterprise_response" name="Initial Response (2hr SLA)">
+      <bpmn:incoming>Flow_10</bpmn:incoming>
+      <bpmn:outgoing>Flow_11</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:boundaryEvent id="enterprise_timer" attachedToRef="enterprise_response">
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration>PT2H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+
+    <bpmn:serviceTask id="verify_government" name="Verify Government Organization">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_12</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="government_response" name="Initial Response (4hr SLA)">
+      <bpmn:incoming>Flow_12</bpmn:incoming>
+      <bpmn:outgoing>Flow_13</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:boundaryEvent id="government_timer" attachedToRef="government_response">
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration>PT4H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+
+    <bpmn:serviceTask id="assign_regional" name="Assign Regional Team">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+      <bpmn:outgoing>Flow_14</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="standard_response" name="Initial Response (24hr SLA)">
+      <bpmn:incoming>Flow_14</bpmn:incoming>
+      <bpmn:outgoing>Flow_15</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:boundaryEvent id="standard_timer" attachedToRef="standard_response">
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration>PT24H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+
+    <bpmn:endEvent id="end_event" name="Lead Processed">
+      <bpmn:incoming>Flow_11</bpmn:incoming>
+      <bpmn:incoming>Flow_13</bpmn:incoming>
+      <bpmn:incoming>Flow_15</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="start_event" targetRef="save_lead_details" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="save_lead_details" targetRef="enrich_lead_data" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="enrich_lead_data" targetRef="lead_type_gateway" />
+    <bpmn:sequenceFlow id="Flow_4" name="Government" sourceRef="lead_type_gateway" targetRef="verify_government">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${organization_type == 'government'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_5" name="Enterprise" sourceRef="lead_type_gateway" targetRef="score_lead">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${organization_type == 'enterprise'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_6" name="Standard" sourceRef="lead_type_gateway" targetRef="assign_regional">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${organization_type == 'standard'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="score_lead" targetRef="priority_gateway" />
+    <bpmn:sequenceFlow id="Flow_8" name="High Score" sourceRef="priority_gateway" targetRef="assign_enterprise">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${score >= 80}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_9" name="Standard Score" sourceRef="priority_gateway" targetRef="assign_regional">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${score < 80}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_10" sourceRef="assign_enterprise" targetRef="enterprise_response" />
+    <bpmn:sequenceFlow id="Flow_11" sourceRef="enterprise_response" targetRef="end_event" />
+    <bpmn:sequenceFlow id="Flow_12" sourceRef="verify_government" targetRef="government_response" />
+    <bpmn:sequenceFlow id="Flow_13" sourceRef="government_response" targetRef="end_event" />
+    <bpmn:sequenceFlow id="Flow_14" sourceRef="assign_regional" targetRef="standard_response" />
+    <bpmn:sequenceFlow id="Flow_15" sourceRef="standard_response" targetRef="end_event" />
+  </bpmn:process>
+</bpmn:definitions>
